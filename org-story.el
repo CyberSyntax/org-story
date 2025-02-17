@@ -41,9 +41,7 @@ If nil, a default subdirectory is used within `org-roam-directory` (or in `user-
 
 (unless org-roam-id-links-cache-directory
   (setq org-roam-id-links-cache-directory
-	(if (boundp 'org-roam-directory)
-	    (expand-file-name "cache" org-roam-directory)
-	  (expand-file-name "org-roam-id-links-cache" user-emacs-directory))))
+	(expand-file-name "org-roam-id-links-cache" cache-dir)))
 (make-directory org-roam-id-links-cache-directory t)
 
 (defun org-get-id-links-in-buffer ()
