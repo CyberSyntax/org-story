@@ -139,10 +139,12 @@ Each cons cell's cdr is a copy of the marker pointing to the start of the headin
 (defun org-clean-heading-text (raw)
   "Clean the heading RAW and return a single line with normalized spacing.
 For each line, remove leading asterisks, any priority marker (of the form [#<number>]),
-scheduling lines (e.g. 'SCHEDULED: …'), and inline links (e.g. [[...][Description]]).
-All leading and trailing whitespace is removed before the cleaned lines are concatenated
-with exactly one space between them."
-  (let* ((lines (split-string raw "\n" t))
+scheduling lines (e.g. 'SCHEDULED: …'), inline links (e.g. [[...][Description]]),
+and property drawers (from :PROPERTIES: to :END:).
+All leading and trailing whitespace is removed before the cleaned lines
+are concatenated with exactly one space between them."
+  (let* ((raw (replace-regexp-in-string ":PROPERTIES:\\(?:.\\|\n\\)*?:END:" "" raw))
+	 (lines (split-string raw "\n" t))
 	 (clean-lines
 	  (mapcar (lambda (line)
 		    (let ((line (replace-regexp-in-string "^\\*+[ \t]*" "" line)))
