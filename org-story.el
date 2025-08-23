@@ -30,6 +30,16 @@
 ;; Enable Org element cache for performance.
 (setq org-element-use-cache t)
 
+(defgroup org-story nil
+  "Customization for org-story plot selection."
+  :group 'org)
+
+(defcustom org-story-groups-operator-default 'or
+  "Default operator to combine groups when both Characters and Locations are used.
+Allowed values: 'and or 'or."
+  :type '(choice (const and) (const or))
+  :group 'org-story)
+
 ;;;----------------------------------------------------------------------
 ;;; Section 1: CACHING OF ID LINKS
 ;;;----------------------------------------------------------------------
@@ -217,62 +227,66 @@ If no recognized dirs are present or both groups empty, return nil (fallback)."
           (list :characters chars :locations locs))))))
 
 (defun org-story--read-grouped (chars locs)
-  "Two-phase UI:
-- Phase 1 over CHARS, Phase 2 over LOCS.
-- First prompt blank = select ALL (OR) across both groups; no operator prompt.
-Returns (list IDS OPERATOR) or nil if nothing chosen."
+  "Two-phase UI with simple defaults:
+- Empty RET at the first prompt of a group selects ALL in that group (OR).
+- \"[Skip]\" lets you skip a group.
+- No operator prompts; group-internal operator is 'or; between groups is `org-story-groups-operator-default`.
+Returns (LIST 'grouped) where LIST is a plist:
+  :chars IDS :locs IDS :char-op 'or :loc-op 'or :groups-op OP."
   (let* ((char-tuples (org-story--title->ids chars))
          (loc-tuples  (org-story--title->ids locs))
          (char-titles (car char-tuples))
          (loc-titles  (car loc-tuples))
          (char-map (cdr char-tuples))
          (loc-map  (cdr loc-tuples))
-         (selected-ids '())
-         (first-prompt t)
-         (auto-all nil))
+         (all-char-ids (apply #'append (mapcar (lambda (t) (gethash t char-map)) char-titles)))
+         (all-loc-ids  (apply #'append (mapcar (lambda (t) (gethash t loc-map))  loc-titles)))
+         (char-selected '())
+         (loc-selected '()))
+    ;; Characters phase
     (when char-titles
-      (let ((done nil))
+      (let ((first t) done choice)
         (while (not done)
-          (let* ((prompt (if first-prompt
-                             "Character (RET to select ALL): "
-                           "Character (RET to finish): "))
-                 (choice (completing-read prompt char-titles nil nil)))
-            (cond
-             ((and first-prompt (string= choice ""))
-              (setq auto-all t)
-              (setq selected-ids
-                    (append selected-ids
-                            (apply #'append (mapcar (lambda (t) (gethash t char-map)) char-titles))
-                            (apply #'append (mapcar (lambda (t) (gethash t loc-map)) loc-titles))))
-              (setq done t))
-             ((string= choice "")
-              (setq done t))
-             (t
-              (setq first-prompt nil)
-              (setq selected-ids (append selected-ids (gethash choice char-map)))
-              (setq char-titles (delete choice char-titles))))))))
-    (when (and (not auto-all) loc-titles)
-      (let ((done nil))
+          (setq choice (completing-read
+                        (if first
+                            "Character (RET=ALL, [Skip]=skip, or pick one): "
+                          "Character (RET=finish): ")
+                        (append char-titles '("ALL" "[Skip]")) nil nil))
+          (cond
+           ((and first (string= choice "")) (setq char-selected all-char-ids done t)) ; first empty -> ALL
+           ((string= choice "") (setq done t))                                        ; finish
+           ((string= choice "[Skip]") (setq done t))                                  ; skip group
+           ((string= choice "ALL") (setq char-selected all-char-ids done t))
+           (t
+            (setq first nil)
+            (setq char-selected (append char-selected (gethash choice char-map)))
+            (setq char-titles (delete choice char-titles)))))))
+    ;; Locations phase
+    (when loc-titles
+      (let ((first t) done choice)
         (while (not done)
-          (let* ((prompt (if first-prompt
-                             "Location (RET to finish): "
-                           "Location (RET to finish): "))
-                 (choice (completing-read prompt loc-titles nil nil)))  ;; allow empty RET
-            (cond
-             ((string= choice "")
-              (setq done t))
-             (t
-              (setq first-prompt nil)
-              (setq selected-ids (append selected-ids (gethash choice loc-map)))
-              (setq loc-titles (delete choice loc-titles))))))))
-    (cond
-     ((null selected-ids) nil)
-     (auto-all (list selected-ids 'or))
-     ((= (length selected-ids) 1) (list selected-ids 'or))
-     (t
-      (let* ((opstr (completing-read "Operator (and/or): " '("and" "or") nil t nil nil "or"))
-             (op (intern opstr)))
-        (list selected-ids op))))))
+          (setq choice (completing-read
+                        (if first
+                            "Location (RET=ALL, [Skip]=skip, or pick one): "
+                          "Location (RET=finish): ")
+                        (append loc-titles '("ALL" "[Skip]")) nil nil))
+          (cond
+           ((and first (string= choice "")) (setq loc-selected all-loc-ids done t))   ; first empty -> ALL
+           ((string= choice "") (setq done t))                                        ; finish
+           ((string= choice "[Skip]") (setq done t))                                  ; skip group
+           ((string= choice "ALL") (setq loc-selected all-loc-ids done t))
+           (t
+            (setq first nil)
+            (setq loc-selected (append loc-selected (gethash choice loc-map)))
+            (setq loc-titles (delete choice loc-titles)))))))
+    (let ((sel (list :chars (delete-dups char-selected)
+                     :locs  (delete-dups loc-selected)
+                     :char-op 'or :loc-op 'or
+                     :groups-op org-story-groups-operator-default)))
+      (if (and (null (plist-get sel :chars))
+               (null (plist-get sel :locs)))
+          nil
+        (list sel 'grouped)))))
 
 ;;;----------------------------------------------------------------------
 ;;; Section 3: EXTRACTION AND CLEANUP OF FILTERED HEADINGS
@@ -440,9 +454,55 @@ With prefix ARG (C-u), force a fresh scan (ignore cache)."
               (org-filter-headings-by-ids selected-ids operator))
           (message "No narrative elements selected."))))))
 
+(defun org-get-filtered-headings-from-buffer-grouped (sel)
+  "Filter headings with group-aware semantics.
+SEL plist: :chars IDS :locs IDS :char-op OP :loc-op OP :groups-op OP.
+- Within a group: OP is 'and or 'or (default 'or).
+- Between groups: :groups-op (default `org-story-groups-operator-default`)."
+  (let* ((char-ids (plist-get sel :chars))
+         (loc-ids  (plist-get sel :locs))
+         (char-op  (or (plist-get sel :char-op) 'or))
+         (loc-op   (or (plist-get sel :loc-op)  'or))
+         (groups-op (or (plist-get sel :groups-op) org-story-groups-operator-default))
+         (char-rx (mapcar (lambda (id) (regexp-quote (format "id:%s" id))) char-ids))
+         (loc-rx  (mapcar (lambda (id) (regexp-quote (format "id:%s" id)))  loc-ids))
+         (headings '()))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward org-heading-regexp nil t)
+        (let ((start (line-beginning-position))
+              (end (progn (outline-next-heading) (point))))
+          (let* ((txt (buffer-substring-no-properties start end))
+                 (char-matches (mapcar (lambda (rx) (string-match-p rx txt)) char-rx))
+                 (loc-matches  (mapcar (lambda (rx) (string-match-p rx txt))  loc-rx))
+                 (char-ok (and char-ids
+                               (if (eq char-op 'and)
+                                   (cl-every #'identity char-matches)
+                                 (cl-some  #'identity char-matches))))
+                 (loc-ok  (and loc-ids
+                               (if (eq loc-op 'and)
+                                   (cl-every #'identity loc-matches)
+                                 (cl-some  #'identity loc-matches))))
+                 (ok (cond
+                      ((and char-ids loc-ids)
+                       (if (eq groups-op 'and) (and char-ok loc-ok) (or char-ok loc-ok)))
+                      (char-ids char-ok)
+                      (loc-ids  loc-ok)
+                      (t nil))))
+            (when ok
+              (push (cons txt (copy-marker start)) headings))))))
+    (nreverse headings)))
+
 (defun org-filter-headings-by-ids (ids operator)
-  "Filter headings by UUIDs (IDS) using OPERATOR ('and or 'or) and show the plot."
-  (let ((headings (org-get-filtered-headings-from-buffer ids operator)))
+  "Filter headings by UUIDs (legacy) or a grouped selection plist."
+  (let ((headings
+         (cond
+          ((or (eq operator 'grouped)
+               (and (listp ids)
+                    (or (memq :chars ids) (memq :locs ids))))
+           (org-get-filtered-headings-from-buffer-grouped ids))
+          (t
+           (org-get-filtered-headings-from-buffer ids operator)))))
     (if headings
         (org-display-filtered-headings-buffer headings ids operator (current-buffer))
       (message "No matching headings found."))))
