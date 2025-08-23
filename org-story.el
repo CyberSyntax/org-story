@@ -25,6 +25,7 @@
 (require 'org-roam)
 (require 'cl-lib)     ;; For cl-every and cl-some
 (require 'seq)        ;; For sequence operations
+(require 'subr-x)
 
 ;; Enable Org element cache for performance.
 (setq org-element-use-cache t)
@@ -41,7 +42,10 @@ If nil, a default subdirectory is used within `org-roam-directory` (or in `user-
 
 (unless org-roam-id-links-cache-directory
   (setq org-roam-id-links-cache-directory
-	(expand-file-name "org-roam-id-links-cache" cache-dir)))
+        (expand-file-name
+         "org-roam-id-links-cache"
+         (or (bound-and-true-p org-roam-directory)
+             user-emacs-directory))))
 (make-directory org-roam-id-links-cache-directory t)
 
 (defun org-get-id-links-in-buffer ()
@@ -50,68 +54,228 @@ Each element is of the form (:uuid UUID :title TITLE), where TITLE is obtained
 by querying the Org-roam database for the given UUID."
   (let ((uuids '()))
     (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward org-link-bracket-re nil t)
-	(let ((link (org-element-context)))
-	  (when (string= (org-element-property :type link) "id")
-	    (push (org-element-property :path link) uuids)))))
+	(goto-char (point-min))
+	(while (re-search-forward org-link-bracket-re nil t)
+	  (let ((link (org-element-context)))
+	    (when (string= (org-element-property :type link) "id")
+	      (push (org-element-property :path link) uuids)))))
     (setq uuids (delete-dups uuids))
     (let* ((uuid-vector (vconcat uuids))
-	   (uuid-title-alist
-	    (org-roam-db-query
-	     [:select [id title]
-	      :from nodes
-	      :where id :in $v1]
-	     uuid-vector))
-	   (uuid-title-hash (make-hash-table :test 'equal)))
-      (dolist (pair uuid-title-alist)
-	(puthash (car pair) (cadr pair) uuid-title-hash))
-      (mapcar (lambda (uuid)
-		(let ((title (gethash uuid uuid-title-hash "Untitled")))
-		  (if (string= title "Untitled")
-		      `(:uuid ,uuid :title ,(format "Untitled (%s)" uuid))
-		    `(:uuid ,uuid :title ,title))))
-	      uuids))))
+	     (uuid-title-alist
+	      (org-roam-db-query
+	       [:select [id title]
+		:from nodes
+		:where id :in $v1]
+	       uuid-vector))
+	     (uuid-title-hash (make-hash-table :test 'equal)))
+	(dolist (pair uuid-title-alist)
+	  (puthash (car pair) (cadr pair) uuid-title-hash))
+	(mapcar (lambda (uuid)
+		  (let ((title (gethash uuid uuid-title-hash "Untitled")))
+		    (if (string= title "Untitled")
+			`(:uuid ,uuid :title ,(format "Untitled (%s)" uuid))
+		      `(:uuid ,uuid :title ,title))))
+		uuids))))
 
 (defun org-save-id-links-cache (cache-file result)
   "Save RESULT (a list of ID links) to CACHE-FILE with today's date stamp."
   (with-temp-file cache-file
     (let ((today (format-time-string "%Y-%m-%d")))
-      (insert (prin1-to-string (list :date today :result result))))))
+	(insert (prin1-to-string (list :date today :result result))))))
 
 (defun org-load-id-links-cache (cache-file)
   "Load cached ID links from CACHE-FILE.
 If the saved date matches today, return the cached result; otherwise, return nil."
   (when (file-exists-p cache-file)
     (let* ((data (with-temp-buffer
-		   (insert-file-contents cache-file)
-		   (read (buffer-string))))
-	   (saved-date (plist-get data :date))
-	   (result (plist-get data :result))
-	   (today (format-time-string "%Y-%m-%d")))
-      (if (string= saved-date today)
-	  result
-	nil))))
+		     (insert-file-contents cache-file)
+		     (read (buffer-string))))
+	     (saved-date (plist-get data :date))
+	     (result (plist-get data :result))
+	     (today (format-time-string "%Y-%m-%d")))
+	(if (string= saved-date today)
+	    result
+	  nil))))
 
-(defun org-get-id-links-in-buffer-cached ()
-  "Return the ID links from the current buffer, using a file cache when possible.
-If the buffer is associated with a file, a cache file (named after the file)
-is used so that extraction happens at most once per day. Otherwise, call `org-get-id-links-in-buffer`."
-  (if (not (buffer-file-name))
-      (org-get-id-links-in-buffer)
-    (let* ((cache-file (expand-file-name
-			(concat (file-name-nondirectory (buffer-file-name))
-				".id-links.cache")
-			org-roam-id-links-cache-directory))
-	   (cached-result (org-load-id-links-cache cache-file)))
-      (if cached-result
-	  cached-result
-	(let ((result (org-get-id-links-in-buffer)))
-	  (org-save-id-links-cache cache-file result)
-	  result)))))
+(defun org-get-id-links-in-buffer-cached (&optional force)
+  "Return ID links, using a per-file, per-day cache.
+If FORCE is non-nil, or the buffer is modified, read from the current
+buffer and bypass the cache."
+  (let ((bf (buffer-file-name)))
+    (cond
+     ((or force (not bf))            ; no file or forced -> live parse
+      (org-get-id-links-in-buffer))
+     ((buffer-modified-p)            ; unsaved edits -> live parse
+      (org-get-id-links-in-buffer))
+     (t                              ; use the cache, else refresh it
+      (let* ((cache-file (expand-file-name
+                          (concat (file-name-nondirectory bf) ".id-links.cache")
+                          org-roam-id-links-cache-directory))
+             (cached-result (org-load-id-links-cache cache-file)))
+        (if cached-result
+            cached-result
+          (let ((result (org-get-id-links-in-buffer)))
+            (org-save-id-links-cache cache-file result)
+            result)))))))
+
+;;----------------------------------------------------------------------
+;; Section 2: Character/Location grouping, frequency, and two-phase UI
+;;----------------------------------------------------------------------
+
+(defun org-story--project-root ()
+  "Return the directory of the current file, or nil if not visiting a file."
+  (when (buffer-file-name)
+    (file-name-directory (buffer-file-name))))
+
+(defun org-story--id-frequency-hash ()
+  "Return a hash mapping UUID -> frequency of id: links in the current buffer."
+  (let ((counts (make-hash-table :test 'equal)))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward org-link-bracket-re nil t)
+        (let ((link (org-element-context)))
+          (when (string= (org-element-property :type link) "id")
+            (let ((uuid (org-element-property :path link)))
+              (puthash uuid (1+ (gethash uuid counts 0)) counts))))))
+    counts))
+
+(defun org-story--uuid-file-map (uuids)
+  "Return a hash mapping UUID -> absolute file path via Org-roam DB."
+  (let ((result (make-hash-table :test 'equal)))
+    (when uuids
+      (let* ((vec (vconcat uuids))
+             (rows (org-roam-db-query
+                    [:select [id file] :from nodes :where id :in $v1]
+                    vec)))
+        (dolist (row rows)
+          (puthash (car row) (cadr row) result))))
+    result))
+
+(defun org-story--sort-candidates (cands)
+  "Sort CANDS (list of plists with :freq and :title) by freq desc, title asc."
+  (sort cands
+        (lambda (a b)
+          (let ((fa (plist-get a :freq))
+                (fb (plist-get b :freq)))
+            (if (/= fa fb)
+                (> fa fb)
+              (string-lessp (or (plist-get a :title) "")
+                            (or (plist-get b :title) "")))))))
+
+(defun org-story--title->ids (cands)
+  "From candidate plists, return (ORDER . TABLE) where TABLE maps title -> list of UUIDs.
+ORDER preserves the order of first appearance in CANDS."
+  (let ((tbl (make-hash-table :test 'equal))
+        (order '()))
+    (dolist (c cands)
+      (let ((title (or (plist-get c :title) "Untitled"))
+            (id (plist-get c :uuid)))
+        (unless (gethash title tbl)
+          (puthash title '() tbl)
+          (push title order))
+        (puthash title (append (gethash title tbl) (list id)) tbl)))
+    (cons (nreverse order) tbl)))
+
+(defun org-story--collect-candidates (id-links)
+  "Return plist (:characters CHARS :locations LOCS) for recognized candidates.
+Each candidate is (:uuid ID :title TITLE :freq N), sorted by freq desc then title.
+If no recognized dirs are present or both groups empty, return nil (fallback)."
+  (let ((root (org-story--project-root)))
+    (when root
+      (let* ((char-dir (expand-file-name "characters/" root))
+             (loc-dir  (expand-file-name "locations/"  root))
+             (any-dir-present (or (file-directory-p char-dir)
+                                  (file-directory-p loc-dir)))
+             (uuids (mapcar (lambda (e) (plist-get e :uuid)) id-links))
+             (uuid->title (let ((h (make-hash-table :test 'equal)))
+                            (dolist (e id-links)
+                              (puthash (plist-get e :uuid)
+                                       (plist-get e :title) h))
+                            h))
+             (uuid->file (org-story--uuid-file-map uuids))
+             (counts (org-story--id-frequency-hash))
+             (chars '())
+             (locs '()))
+        (dolist (id uuids)
+          (let* ((file (gethash id uuid->file))
+                 (title (gethash id uuid->title))
+                 (freq (gethash id counts 0)))
+            (when (and file (file-name-absolute-p file))
+              (let ((afile (file-truename file)))
+                (cond
+                 ((and (file-directory-p char-dir)
+                       (string-prefix-p (file-truename char-dir) afile))
+                  (push (list :uuid id :title title :freq freq) chars))
+                 ((and (file-directory-p loc-dir)
+                       (string-prefix-p (file-truename loc-dir) afile))
+                  (push (list :uuid id :title title :freq freq) locs)))))))
+        (setq chars (org-story--sort-candidates chars))
+        (setq locs (org-story--sort-candidates locs))
+        (if (or (not any-dir-present)
+                (and (null chars) (null locs)))
+            nil
+          (list :characters chars :locations locs))))))
+
+(defun org-story--read-grouped (chars locs)
+  "Two-phase UI:
+- Phase 1 over CHARS, Phase 2 over LOCS.
+- First prompt blank = select ALL (OR) across both groups; no operator prompt.
+Returns (list IDS OPERATOR) or nil if nothing chosen."
+  (let* ((char-tuples (org-story--title->ids chars))
+         (loc-tuples  (org-story--title->ids locs))
+         (char-titles (car char-tuples))
+         (loc-titles  (car loc-tuples))
+         (char-map (cdr char-tuples))
+         (loc-map  (cdr loc-tuples))
+         (selected-ids '())
+         (first-prompt t)
+         (auto-all nil))
+    (when char-titles
+      (let ((done nil))
+        (while (not done)
+          (let* ((prompt (if first-prompt
+                             "Character (RET to select ALL): "
+                           "Character (RET to finish): "))
+                 (choice (completing-read prompt char-titles nil nil)))
+            (cond
+             ((and first-prompt (string= choice ""))
+              (setq auto-all t)
+              (setq selected-ids
+                    (append selected-ids
+                            (apply #'append (mapcar (lambda (t) (gethash t char-map)) char-titles))
+                            (apply #'append (mapcar (lambda (t) (gethash t loc-map)) loc-titles))))
+              (setq done t))
+             ((string= choice "")
+              (setq done t))
+             (t
+              (setq first-prompt nil)
+              (setq selected-ids (append selected-ids (gethash choice char-map)))
+              (setq char-titles (delete choice char-titles))))))))
+    (when (and (not auto-all) loc-titles)
+      (let ((done nil))
+        (while (not done)
+          (let* ((prompt (if first-prompt
+                             "Location (RET to finish): "
+                           "Location (RET to finish): "))
+                 (choice (completing-read prompt loc-titles nil nil)))  ;; allow empty RET
+            (cond
+             ((string= choice "")
+              (setq done t))
+             (t
+              (setq first-prompt nil)
+              (setq selected-ids (append selected-ids (gethash choice loc-map)))
+              (setq loc-titles (delete choice loc-titles))))))))
+    (cond
+     ((null selected-ids) nil)
+     (auto-all (list selected-ids 'or))
+     ((= (length selected-ids) 1) (list selected-ids 'or))
+     (t
+      (let* ((opstr (completing-read "Operator (and/or): " '("and" "or") nil t nil nil "or"))
+             (op (intern opstr)))
+        (list selected-ids op))))))
 
 ;;;----------------------------------------------------------------------
-;;; Section 2: EXTRACTION AND CLEANUP OF FILTERED HEADINGS
+;;; Section 3: EXTRACTION AND CLEANUP OF FILTERED HEADINGS
 ;;;----------------------------------------------------------------------
 
 (defun org-get-filtered-headings-from-buffer (ids operator)
@@ -119,21 +283,21 @@ is used so that extraction happens at most once per day. Otherwise, call `org-ge
 Only headings matching the UUIDs in IDS (tested with OPERATOR—either 'and or 'or) are included.
 Each cons cell's cdr is a copy of the marker pointing to the start of the heading."
   (let ((headings '())
-	(id-regexps (mapcar (lambda (id)
-			      (regexp-quote (format "id:%s" id)))
-			    ids)))
+	  (id-regexps (mapcar (lambda (id)
+				(regexp-quote (format "id:%s" id)))
+			      ids)))
     (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward org-heading-regexp nil t)
-	(let ((start (line-beginning-position))
-	      (end (progn (outline-next-heading) (point))))
-	  (let* ((heading-text (buffer-substring-no-properties start end))
-		 (matches (mapcar (lambda (regexp)
-				    (string-match-p regexp heading-text))
-				  id-regexps)))
-	    (when (or (and (eq operator 'and) (cl-every #'identity matches))
-		      (and (eq operator 'or)  (cl-some #'identity matches)))
-	      (push (cons heading-text (copy-marker start)) headings))))))
+	(goto-char (point-min))
+	(while (re-search-forward org-heading-regexp nil t)
+	  (let ((start (line-beginning-position))
+		(end (progn (outline-next-heading) (point))))
+	    (let* ((heading-text (buffer-substring-no-properties start end))
+		   (matches (mapcar (lambda (regexp)
+				      (string-match-p regexp heading-text))
+				    id-regexps)))
+	      (when (or (and (eq operator 'and) (cl-every #'identity matches))
+			(and (eq operator 'or)  (cl-some #'identity matches)))
+		(push (cons heading-text (copy-marker start)) headings))))))
     (nreverse headings)))
 
 (defun org-clean-heading-text (raw)
@@ -144,32 +308,26 @@ and property drawers (from :PROPERTIES: to :END:).
 All leading and trailing whitespace is removed before the cleaned lines
 are concatenated with exactly one space between them."
   (let* ((raw (replace-regexp-in-string ":PROPERTIES:\\(?:.\\|\n\\)*?:END:" "" raw))
-	 (lines (split-string raw "\n" t))
-	 (clean-lines
-	  (mapcar (lambda (line)
-		    (let ((line (replace-regexp-in-string "^\\*+[ \t]*" "" line)))
-		      (setq line (replace-regexp-in-string "\\[#[0-9]+\\][ \t]*" "" line))
-		      (setq line (replace-regexp-in-string "\\[\\[.*?\\]\\[\\(.*?\\)\\]\\]" "\\1" line))
-		      (setq line (replace-regexp-in-string "SCHEDULED:[^\n]*" "" line))
-		      (string-trim line)))
-		  lines))
-	 (paragraph (string-join clean-lines " ")))
+	   (lines (split-string raw "\n" t))
+	   (clean-lines
+	    (mapcar (lambda (line)
+		      (let ((line (replace-regexp-in-string "^\\*+[ \t]*" "" line)))
+			(setq line (replace-regexp-in-string "\\[#[0-9]+\\][ \t]*" "" line))
+			(setq line (replace-regexp-in-string "\\[\\[.*?\\]\\[\\(.*?\\)\\]\\]" "\\1" line))
+			(setq line (replace-regexp-in-string "SCHEDULED:[^\n]*" "" line))
+			(string-trim line)))
+		    lines))
+	   (paragraph (string-join clean-lines " ")))
     (string-trim (replace-regexp-in-string "[ \t]+" " " paragraph))))
 
 ;;;----------------------------------------------------------------------
-;;; Section 3: DISPLAYING FILTERED HEADINGS AS A NARRATIVE PLOT
+;;; Section 4: DISPLAYING FILTERED HEADINGS AS A NARRATIVE PLOT
 ;;;----------------------------------------------------------------------
 
 (defun org-display-filtered-headings-buffer (headings ids operator source-buffer)
-  "Display filtered HEADINGS as a narrative plot in a vertically split window.
-HEADINGS is a list of cons cells (RAW-HEADING . MARKER). Each heading is cleaned via
-`org-clean-heading-text` and concatenated with exactly one space between segments.
-Each segment has its original MARKER attached as a text property (so RET or a left-click jumps to it).
-After assembling the plot, the current window is split vertically: the top window shows the source buffer,
-and the bottom window displays the narrative plot in the buffer \"*Narrative Plot*\".
-IDS, OPERATOR, and SOURCE-BUFFER are stored locally for later reuse."
+  "Display filtered HEADINGS as a narrative plot in a vertically split window."
   (let ((plot-buf (get-buffer-create "*Narrative Plot*"))
-	(orig-buf source-buffer))
+        (orig-buf source-buffer))
     (with-current-buffer plot-buf
       (setq buffer-read-only nil)
       (erase-buffer)
@@ -177,32 +335,30 @@ IDS, OPERATOR, and SOURCE-BUFFER are stored locally for later reuse."
       (setq-local org-filter-selected-ids ids)
       (setq-local org-filter-operator operator)
       (let ((n (length headings))
-	    (i 0))
-	(dolist (entry headings)
-	  (setq i (1+ i))
-	  (let* ((raw (car entry))
-		 (marker (cdr entry))
-		 (clean-text (org-clean-heading-text raw))
-		 (start (point)))
-	    (insert clean-text)
-	    (add-text-properties start (point)
-				 `(orig-marker ,marker
-					       mouse-face highlight
-					       help-echo "RET or click: Jump to original heading"))
-	    (when (< i n)
-	      (insert " ")))))
+            (i 0))
+        (dolist (entry headings)
+          (setq i (1+ i))
+          (let* ((raw (car entry))
+                 (marker (cdr entry))
+                 (clean-text (org-clean-heading-text raw))
+                 (start (point)))
+            (insert clean-text)
+            (add-text-properties start (point)
+                                 `(orig-marker ,marker
+                                               mouse-face highlight
+                                               help-echo "RET or click: Jump to original heading"))
+            (when (< i n)
+              (insert " ")))))
       (goto-char (point-min))
       (org-filtered-heading-mode))
-    ;; Use the golden ratio for the vertical split.
     (delete-other-windows)
     (let* ((total (window-total-height (selected-window)))
-	   (top-height (max 5 (floor (* total 0.382)))))  ; ≈ 38.2% for the source buffer
+           (top-height (max 5 (floor (* total 0.382)))))
       (let ((top-window (split-window (selected-window) top-height 'above)))
-	(set-window-buffer top-window orig-buf)))
+        (set-window-buffer top-window orig-buf)))
     (other-window 1)
     (switch-to-buffer plot-buf)
-    plot-buf)
-    (other-window 1))
+    plot-buf))
 
 (defvar org-filtered-heading-mode-map
   (let ((map (make-sparse-keymap)))
@@ -222,86 +378,77 @@ Uses the text property `orig-marker` attached to the segment."
   (interactive)
   (let ((marker (get-text-property (point) 'orig-marker)))
     (if (and marker 
-	     (or (buffer-live-p (marker-buffer marker))
-		 (and (marker-buffer marker)
-		      (buffer-file-name (marker-buffer marker)))))
-	(progn
-	  (pop-to-buffer (or (marker-buffer marker)
-			     (find-file-noselect (buffer-file-name (marker-buffer marker)))))
-	  (goto-char marker)
-	  (recenter))
-      (message "Original location not available."))))
+	       (or (buffer-live-p (marker-buffer marker))
+		   (and (marker-buffer marker)
+			(buffer-file-name (marker-buffer marker)))))
+	  (progn
+	    (pop-to-buffer (or (marker-buffer marker)
+			       (find-file-noselect (buffer-file-name (marker-buffer marker)))))
+	    (goto-char marker)
+	    (recenter))
+	(message "Original location not available."))))
 
 ;;;----------------------------------------------------------------------
-;;; Section 4: INTERACTIVE PLOT VIEW COMMAND
+;;; Section 5: INTERACTIVE PLOT VIEW COMMAND
 ;;;----------------------------------------------------------------------
 
 (defvar org-story--last-selected-ids nil
   "Stores the last selected narrative element IDs used in `org-story-show-plot`.")
 
 ;;;###autoload
-(defun org-story-show-plot ()
+(defun org-story-show-plot (arg)
   "Interactively select narrative elements and display their narrative plot.
-This command gathers narrative ID links (for characters, places, scenes, etc.) from the current buffer.
-For the first prompt, leaving the input blank will reuse the previous selection (if one exists);
-otherwise, you enter one or more narrative elements. Subsequent prompts read as 'Narrative element (RET to finish):'.
-The corresponding headings are filtered (using an AND/OR operator) and concatenated into a single paragraph.
-In the narrative plot view, pressing RET or left-clicking on a segment jumps to its source.
-To update the view, simply rerun this command."
-  (interactive)
-  (let* ((id-links (org-get-id-links-in-buffer-cached))
-	 (titles (delete-dups (mapcar (lambda (entry)
-					(plist-get entry :title))
-				      id-links)))
-	 (selected-ids nil)
-	 (first-prompt t)
-	 (continue t))
-    (while (and continue titles)
-      (let* ((prompt (if (and first-prompt org-story--last-selected-ids)
-			 "Narrative element (RET to reuse previous selection): "
-		       "Narrative element (RET to finish): "))
-	     (title (completing-read prompt titles nil t)))
-	(if (string= title "")
-	    (progn
-	      (if (and first-prompt org-story--last-selected-ids)
-		  (setq selected-ids org-story--last-selected-ids))
-	      (setq continue nil))
-	  (setq first-prompt nil)
-	  (let ((matching-ids (mapcar (lambda (entry)
-					(plist-get entry :uuid))
-				      (seq-filter (lambda (entry)
-						    (string= title (plist-get entry :title)))
-						  id-links))))
-	    (setq selected-ids (append selected-ids matching-ids))
-	    (setq titles (remove title titles))))))
-    (if selected-ids
-	(let* ((operator (if (> (length selected-ids) 1)
-			     (intern (completing-read "Operator (and/or): " '("and" "or") nil t))
-			   'or)))
-	  (setq org-story--last-selected-ids selected-ids)
-	  (org-filter-headings-by-ids selected-ids operator))
-      (message "No narrative elements selected."))))
+With prefix ARG (C-u), force a fresh scan (ignore cache)."
+  (interactive "P")
+  (let* ((id-links (org-get-id-links-in-buffer-cached arg))
+         (grouped (org-story--collect-candidates id-links)))
+    (if grouped
+        (let* ((chars (plist-get grouped :characters))
+               (locs  (plist-get grouped :locations))
+               (res   (org-story--read-grouped chars locs)))
+          (if res
+              (org-filter-headings-by-ids (nth 0 res) (nth 1 res))
+            (message "No narrative elements selected.")))
+      ;; Fallback: legacy flow
+      (let* ((titles (delete-dups (mapcar (lambda (e) (plist-get e :title)) id-links)))
+             (selected-ids nil)
+             (first-prompt t)
+             (continue t))
+        (while (and continue titles)
+          (let* ((prompt (if (and first-prompt org-story--last-selected-ids)
+                             "Narrative element (RET to reuse previous selection): "
+                           "Narrative element (RET to finish): "))
+                 ;; Allow empty input -> finish/reuse
+                 (title (completing-read prompt titles nil nil)))
+            (if (string= title "")
+                (progn
+                  (when (and first-prompt org-story--last-selected-ids)
+                    (setq selected-ids org-story--last-selected-ids))
+                  (setq continue nil))
+              (setq first-prompt nil)
+              (let ((matching-ids (mapcar (lambda (entry) (plist-get entry :uuid))
+                                          (seq-filter (lambda (entry)
+                                                        (string= title (plist-get entry :title)))
+                                                      id-links))))
+                (setq selected-ids (append selected-ids matching-ids))
+                (setq titles (remove title titles))))))
+        (if selected-ids
+            (let ((operator (if (> (length selected-ids) 1)
+                                (intern (completing-read "Operator (and/or): " '("and" "or") nil t))
+                              'or)))
+              (setq org-story--last-selected-ids selected-ids)
+              (org-filter-headings-by-ids selected-ids operator))
+          (message "No narrative elements selected."))))))
 
 (defun org-filter-headings-by-ids (ids operator)
-  "Filter headings by the specific UUIDs (IDS) using OPERATOR (either 'and or 'or).
-The matching headings are then displayed as a narrative plot (a single paragraph)
-with each segment clickable."
+  "Filter headings by UUIDs (IDS) using OPERATOR ('and or 'or) and show the plot."
   (let ((headings (org-get-filtered-headings-from-buffer ids operator)))
     (if headings
-	(org-display-filter-headings_buffer headings ids operator (current-buffer))
-      (message "No matching headings found."))))
-
-(defun org-filter-headings-by-ids (ids operator)
-  "Filter headings by the specific UUIDs (IDS) using OPERATOR (either 'and or 'or).
-The matching headings are then displayed as a narrative plot (a single paragraph)
-with each segment clickable."
-  (let ((headings (org-get-filtered-headings-from-buffer ids operator)))
-    (if headings
-	(org-display-filtered-headings-buffer headings ids operator (current-buffer))
+        (org-display-filtered-headings-buffer headings ids operator (current-buffer))
       (message "No matching headings found."))))
 
 ;;;----------------------------------------------------------------------
-;;; Section 5: KEY BINDINGS AND PROVIDE
+;;; Section 6: KEY BINDINGS AND PROVIDE
 ;;;----------------------------------------------------------------------
 
 (global-set-key (kbd "C-c s p") 'org-story-show-plot)
