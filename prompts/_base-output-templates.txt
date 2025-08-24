@@ -1,0 +1,68 @@
+---
+title: Base — Output Templates
+description: Exactly one block; no commentary; shared across prompts.
+---
+
+[COMPRESS
+Focus: "…"
+Keep: "…" | new
+Drop: "…"
+Prev (SG): "…"
+Sentence (Keep/new): {one action-only; outcome-free; names}
+Antecedents (CG): ← "…"; "…"
+Consequents (CG): → "…"; "…"
+Links: update {causes|enables|resolves|foreshadows|mirrors|parallels}; replace/remove contradicts
+Density: assert Δδ ≥ 0
+Justify: {REDUNDANCY_ELIMINATION|SUBSUMPTION|NECESSITY_UPGRADE|PAYOFF_TIGHTEN}
+]
+
+[SPLIT
+Focus: "…"
+Focus’ (trimmed): {one action-only; outcome-free; names}
+Compensatory New (print - NewN for K chosen by rule: K* = argmax_{k∈{1..min(3,CLI)}} S(k) s.t. Δδ(k)≥0; allow k>3 only if S(k)−S(k−1)≥2 and Δδ(k)>Δδ(k−1); ties→smallest k):
+- New1
+  Prev (SG): "…"
+  Sentence: {one action-only; outcome-free; names}
+  Antecedents (CG): ← "…"; "…"
+  Consequents (CG): → "…"; "…"
+  FocusLink: Focus —{causes|enables|resolves|foreshadows|mirrors|parallels}→ New1 | New1 → Focus
+- NewN
+  Prev (SG): "…"
+  Sentence: {one action-only; outcome-free; names}
+  Antecedents (CG): ← "…"; "…"
+  Consequents (CG): → "…"; "…"
+  FocusLink: …
+Density: assert Δδ ≥ 0; preserve or resolve hooks
+Justify: {ATOMICITY_FIX|CAUSAL_EXPLICITATION|PAYOFF_STAGING|GLOBAL_WEAVE|LOSS_COMPENSATION}
+]
+
+[ADD
+Focus: "…"
+Prev (SG): "…"
+NewID: new
+Sentence: {one action-only; outcome-free; names}
+Antecedents (CG): ← "…"; "…"
+Consequents (CG): → "…"; "…"
+Prev→New (CG): {causes|enables|mirrors|parallels}
+New→(implicit Next) (CG): {causes|enables|resolves|foreshadows}
+FocusLink: Focus —{causes|enables|resolves|foreshadows|mirrors|parallels}→ New | New → Focus
+Threads/Promises: resolves "…" or foreshadows "…"
+Density: assert Δδ ≥ 0
+Justify: {RESOLVE|FORESHADOW|NECESSITY_UPGRADE|ECHO_BINDING}
+]
+
+[IMPROVE
+Focus: "…"
+Sentence (replacement): {one action-only; outcome-free; names; sharpened verb/parameters}
+Antecedents (CG): ← "…"; "…"
+Consequents (CG): → "…"; "…"
+Links: add/retag {causes|enables|resolves|foreshadows|mirrors|parallels}; eliminate contradicts
+Loss-Compensation New (if implicit content removed):
+- New1
+  Prev (SG): "…"
+  Sentence: {one action-only; outcome-free; names}
+  Antecedents (CG): ← "…"
+  Consequents (CG): → "…"
+Density: assert Δδ ≥ 0; no hook loss
+Justify: {PRECISION|PAYOFF_TIGHTEN|FORESHADOW_TIGHTEN|LOSS_COMPENSATION}
+]

@@ -1,0 +1,26 @@
+---
+title: Module — Validation & Fail-Fast Checklist
+description: Internal checklist before emitting; print only the final block.
+---
+
+Internal checklist (must satisfy; do not print)
+- Shape: no leading whitespace; the first character is '[' immediately followed by {COMPRESS,SPLIT,ADD,IMPROVE}; reply ends with ']'. One block only.
+- If not starting with '[', discard and regenerate once; if still invalid, emit [BLOCKED: E-RESOLVE-404] exactly.
+- Fields: exactly those in the chosen template; correct order; no extras; no blank lines; no commentary.
+  • COMPRESS: Focus → Keep → Drop → Prev (SG) → Sentence (Keep/new) → Antecedents (CG) → Consequents (CG) → Links → Density → Justify  
+  • SPLIT: Focus → Focus’ (trimmed) → Compensatory New (one or more - NewN groups) → Density → Justify  
+  • ADD: Focus → Prev (SG) → NewID → Sentence → Antecedents (CG) → Consequents (CG) → Prev→New (CG) → New→(implicit Next) (CG) → FocusLink → Threads/Promises → Density → Justify  
+  • IMPROVE: Focus → Sentence (replacement) → Antecedents (CG) → Consequents (CG) → Links → Loss-Compensation New (optional - New1) → Density → Justify
+- Identifiers: every node reference is a double-quoted exact PLOT sentence literal; no ids/uuids/link markup.
+- Pronouns: no he/she/they/it/this/that/these/those in Focus’ (trimmed) or any Sentence: line; names only.
+- Coupling: op modifies/replaces Focus, or New links directly to Focus, or resolves a thread touching Focus.
+- SG: ADD/News placed immediately after Prev; Next is implicit and not printed.
+- CG/TG: atomicity (action-only), causality closure (≥1 inbound/outbound), TG legality; Δδ ≥ 0.
+- Compensation: if rewrite removes implicit causal content, include compensatory New with explicit Prev anchors.
+- Format rejection: any bracketed reply composed only of quoted sentences with no required fields (e.g., [SPLIT "…"; "…"] or [MODE: …] with colon) → discard and regenerate once; if still invalid, emit [BLOCKED: E-RESOLVE-404].
+- Only one bracketed block is allowed; if a second block or trailing text appears, discard and regenerate once; failing again → [BLOCKED: E-RESOLVE-404].
+- If any check fails: emit the single [BLOCKED: E-RESOLVE-404] line (or [AMBIGUOUS …] if that was the resolution result) and stop.
+
+Notes
+- Use the shortest correct phrasing that preserves atomicity and links.
+- Never echo PLOT/INPUT; never print FOCUS_META or field labels.

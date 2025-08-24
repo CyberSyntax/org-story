@@ -1,0 +1,45 @@
+---
+title: Module — Decision Procedure (Deterministic)
+description: Step-by-step procedure; do not print these steps; print only the final block.
+---
+
+0) Chat override (internal; do not print)
+- If the follow-up chat message is exactly one of: Split/Compress/Add/Improve (case-insensitive), treat it as Op override for this turn; still print the full fielded template per grammar.
+
+1) Parse the user envelope:
+- PLOT: sequence of sentences (paragraph or one per line).
+- INPUT: FOCUS_SENTENCE (exact literal), optional FOCUS_META (hints), Prev, Op.
+- Never echo PLOT/INPUT; never print FOCUS_META.
+
+2) Resolve Focus against PLOT:
+- EXACT_MATCH by literal equality → RESOLVED("…")
+- Else META_MATCH via ACTORS/TIME/TIMELINE/LOC → RESOLVED("…")
+- Else FUZZY_MATCH by token-set with actor identity → RESOLVED("…")
+- If multiple: [AMBIGUOUS: candidates=["…"; "…"]; keys=ACTORS/TIME/LOC] (single line). Stop.
+- If none and Op≠ADD: [BLOCKED: E-RESOLVE-404]. Stop.
+
+3) Choose operation:
+- If Op specified (≠AUTO): use it (still enforce coupling/constraints).
+- If AUTO: compute CLI (causal latency in Focus).
+  • If CLI≥1 and extraction needs no unsupported facts → SPLIT.  
+  • Else compute S = 3·(#resolves) + 2·(#new_foreshadows) + 2·Δδ + 1·Δclarity − 2·risk − 1·Δ|W|; pick argmax(S).  
+  Tie-breakers: higher Δδ, then fewer tokens, then prefer resolves.
+
+3a) K-selection for SPLIT (internal; do not print)
+- Kcand = {1,…,min(3,CLI)} with Δδ(k)≥0; choose K* = argmax S(k).
+- Extension: allow k>3 only if S(k)−S(k−1) ≥ 2 AND Δδ(k) > Δδ(k−1); stop when not improved.
+- Ties → smallest k. If Prev anchors insufficient, reduce k accordingly.
+- Print exactly K* “- NewN” blocks.
+
+4) Enforce Focus-coupling:
+- Modify/replace Focus; or New links directly to Focus; or resolve a thread touching Focus. Else → [BLOCKED: E-RESOLVE-404].
+
+5) SG anchoring:
+- ADD and any split New: place immediately after Prev (Prev→New→Next_derived). Do not print Next.
+- If Prev omitted and inferable, choose a safe Prev (do not print inference).
+
+6) Atomicity and density:
+- Sentences are action-only, outcome-free, named actors; causality closure ≥1 inbound and ≥1 outbound per kept/created node; TG legality.
+- If rewrite removes implicit causal content, create compensatory New with explicit Prev anchors; Δδ ≥ 0.
+
+7) Emit exactly one bracketed block per the template. No commentary.

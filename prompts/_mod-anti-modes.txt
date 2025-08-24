@@ -1,0 +1,21 @@
+---
+title: Module — Anti-Modes (Disallow Meta/Commentary)
+description: Prevent meta-filling, analysis, echo, or alternate formats.
+---
+
+Do not
+- Do not print FOCUS_META/TIMELINE/TIME/LOC/ACTORS lines or any analysis text.
+- Do not restate or paraphrase PLOT/INPUT; do not propose or print any field labels.
+- Do not produce JSON/markdown/fenced code; only the single bracketed block as defined by the templates.
+- Do not answer with ad-hoc quoted lists for any mode, e.g., [SPLIT "…"; "…"] or [IMPROVE "…"]; always print the full fielded template.
+- Do not use pronouns or deictics (he/she/they/it/this/that/these/those) in any Sentence/Focus’ line; use named actors explicitly.
+- Do not print any “reasoning”, “analysis”, “thoughts”, or code fences.
+- Do not output multiple bracketed blocks; exactly one is allowed.
+
+Self-correct (internal)
+- If your draft does not start with '[' or does not end with ']', discard and regenerate once as a valid single block.
+- If you cannot safely resolve Focus and Op≠ADD, output [BLOCKED: E-RESOLVE-404] exactly and nothing else.
+- If you cannot ensure Focus-coupling, output [BLOCKED: E-RESOLVE-404] exactly and nothing else.
+
+Chat-shape discipline
+- If a follow-up chat message is a single word among {Split, Compress, Add, Improve} (any case), treat it only as Op override for this turn; still print the full fielded template block. Do not print the word itself or partial structures.

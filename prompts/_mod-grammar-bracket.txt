@@ -1,0 +1,90 @@
+---
+title: Module — Reply Grammar (Bracketed Single Block)
+description: Hard grammar; one block only; no commentary.
+---
+
+Reply grammar (must follow)
+- Shape: the first character of the reply is '[' immediately followed by one of {COMPRESS,SPLIT,ADD,IMPROVE}; reply ends with ']'. One block only.
+- Mode header: the first line must be exactly “[COMPRESS”, “[SPLIT”, “[ADD”, or “[IMPROVE” (no colon, no dashes); the next line begins the first field.
+- Exactly one of: [COMPRESS] | [SPLIT] | [ADD] | [IMPROVE].
+- Field order is fixed per template; use the exact field names shown in templates; one field per line; no blank lines.
+- Identifiers: use double-quoted exact PLOT sentence literals for any node reference (verbatim, character-for-character).
+- No extra fields; no commentary; no JSON/markdown/fences; no code blocks; no analysis text.
+- No second bracketed block; do not emit any characters after the closing ‘]’.
+
+Sentence discipline (standalone; no anaphora)
+- Every “Sentence:” line and “Focus’ (trimmed):” must be a single standalone, action-only, outcome-free sentence with named actors only.
+- Do not use pronouns or deictics: no he/she/they/it/this/that/these/those; restate actor names explicitly.
+
+Prohibited formats (invalid for all modes)
+- [SPLIT "…"; "…"]                         ; quoted sentences only, no fields
+- [SPLIT "…"]                               ; missing required fields
+- [IMPROVE "…"] / [ADD "…"] / [COMPRESS "…"] ; missing required fields
+- [SPLIT: …] / [IMPROVE: …]                  ; colon after mode name
+- Any reply not starting with '['             ; shape violation
+- Any output containing more than one bracketed block
+
+Canonical skeletons (for shape; do not echo these)
+[COMPRESS
+Focus: "…"
+Keep: "…" | new
+Drop: "…"
+Prev (SG): "…"
+Sentence (Keep/new): {one action-only; outcome-free; names}
+Antecedents (CG): ← "…"; "…"
+Consequents (CG): → "…"; "…"
+Links: update {causes|enables|resolves|foreshadows|mirrors|parallels}
+Density: assert Δδ ≥ 0
+Justify: {…}
+]
+
+[SPLIT
+Focus: "…"
+Focus’ (trimmed): {one action-only; outcome-free; names}
+Compensatory New (repeat - NewN blocks):
+- New1
+  Prev (SG): "…"
+  Sentence: {one action-only; outcome-free; names}
+  Antecedents (CG): ← "…"; "…"
+  Consequents (CG): → "…"; "…"
+  FocusLink: …
+- NewN
+  Prev (SG): "…"
+  Sentence: {one action-only; outcome-free; names}
+  Antecedents (CG): ← "…"; "…"
+  Consequents (CG): → "…"; "…"
+  FocusLink: …
+Density: assert Δδ ≥ 0
+Justify: {…}
+]
+
+[ADD
+Focus: "…" | <provisional if focus sentence is new>
+Prev (SG): "…"
+NewID: new
+Sentence: {one action-only; outcome-free; names}
+Antecedents (CG): ← "…"; "…"
+Consequents (CG): → "…"; "…"
+Prev→New (CG): {…}
+New→(implicit Next) (CG): {…}
+FocusLink: …
+Threads/Promises: …
+Density: assert Δδ ≥ 0
+Justify: {…}
+]
+
+[IMPROVE
+Focus: "…"
+Sentence (replacement): {one action-only; outcome-free; names; sharpened verb/parameters}
+Antecedents (CG): ← "…"; "…"
+Consequents (CG): → "…"; "…"
+Links: add/retag {…}
+Loss-Compensation New (if implicit content removed):
+- New1
+  Prev (SG): "…"
+  Sentence: {one action-only; outcome-free; names}
+  Antecedents (CG): ← "…"
+  Consequents (CG): → "…"
+Density: assert Δδ ≥ 0
+Justify: {…}
+]

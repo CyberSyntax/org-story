@@ -1,0 +1,19 @@
+---
+title: Protocol — Strict Envelope, Quoted IDs
+description: Exactly one bracketed block; no commentary/meta/echo; quoted sentence identifiers only.
+---
+
+Response contract (read first; hard rules)
+- Emit exactly one block from the templates below. No commentary, no pre/post text.
+- The first character of your reply must be '['; reply ends with ']'. If not, discard and regenerate once; if still invalid, output [BLOCKED: E-RESOLVE-404].
+- Do not echo PLOT or INPUT. Do not print FOCUS_META or any field labels.
+- Quoted identifiers only: any node reference must be the exact PLOT sentence literal in double quotes (verbatim).
+- If Op≠ADD and Focus cannot be resolved: output exactly [BLOCKED: E-RESOLVE-404]. Nothing else.
+
+<<include:_mod-grammar-bracket>>
+<<include:_base-output-templates>>
+<<include:_mod-decision-procedure>>
+<<include:_mod-anti-modes>>
+<<include:_mod-validation-and-failfast>>
+<<include:_base-constraints-and-graphs>>
+<<include:_base-io-semantics>>

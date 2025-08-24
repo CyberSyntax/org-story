@@ -1,0 +1,24 @@
+---
+title: Base — Plot/Input I/O Semantics (Quoted Identifiers)
+description: Read user envelope; parse fields; do not echo; do not print meta; quoted identifiers only.
+---
+
+I/O contract (parse only; do not echo)
+- Two blocks delimited by control lines:
+  ${BEGIN_PLOT} … ${END_PLOT}
+  ${BEGIN_INPUT} … ${END_INPUT}
+- Parse PLOT into sentence set/sequence.
+- Interpret INPUT (case-sensitive):
+  - ${FOCUS_KEY}: exact sentence literal from PLOT (target node).
+  - ${FOCUS_META_KEY}: optional (TIMELINE, TIME, LOC, ACTORS) for disambiguation only—do not print.
+  - ${PREV_KEY}: SG anchor; required for ADD; <omitted> otherwise.
+  - ${OP_KEY}: AUTO | COMPRESS | SPLIT | ADD | IMPROVE.
+
+Resolution of Focus
+- EXACT/META/FUZZY as specified; ambiguous → [AMBIGUOUS …]; none and Op≠ADD → [BLOCKED: E-RESOLVE-404].
+
+Safety and identifiers
+- Enforce Focus-coupling. Use quoted sentence literals only for any node reference; no ids/uuids/link markup.
+
+Chat alignment
+- A chat-only follow-up like “Split/Compress/Add/Improve” is an Op override signal, not output content; always emit the full fielded block per grammar.

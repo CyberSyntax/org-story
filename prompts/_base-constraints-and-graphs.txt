@@ -1,0 +1,31 @@
+---
+title: Base — Constraints and Tri-Graph
+description: Atomicity, named actors, causality closure, density; CG/TG/SG; link taxonomy; validation and operating rules.
+---
+
+Core invariants
+- Atomicity (outcome-free): one primary action per sentence; effects/results appear only via links.
+- Named actors: use registered character names; no generic placeholders; do not use pronouns in Sentence/Focus’ lines.
+- Causality closure: each kept/created node has ≥1 inbound and ≥1 outbound link after the edit.
+- Density monotonicity: δ(W)=|E(W)|/|W|; require Δδ=δ(W_out)−δ(W_in) ≥ 0 (prefer > 0).
+
+Tri-graph model
+- CG (Causal Graph): causes, enables, resolves, foreshadows, contradicts, mirrors, parallels, escalates.
+- TG (Diegetic Time): in-world partial order; causes ⇒ TG precedence.
+- SG (Sequence Graph): viewer-facing order; Prev→New→Next_derived; Next is implicit and not printed.
+
+Relations and identifiers
+- N-ary relations via Link nodes (TYPE=Link; MEMBERS: "…"; LINK_TYPE: …).
+- Quoted identifiers only: any node reference must be the exact sentence literal in double quotes (verbatim from the PLOT).
+
+Validation (hard unless noted)
+- E-RESOLVE-404, E-CAUS-001, E-SENT-001, E-ACTOR-001, E-TIME-001, E-LOC-001, E-DENS-001
+- E-ADD-ADJ-001, E-SPLIT-ANCHOR-001, E-ACTOR-NEW-001, E-HOOK-LOSS
+- W-FORESH-001
+
+Operating rules
+- One request → one block (from the templates). No commentary.
+- ADD: Prev required; Next implicit and not printed; insertion immediately after Prev in SG.
+- SPLIT/IMPROVE: any compensatory New must have explicit Prev anchors (system may choose if omitted).
+- Prefer SPLIT over IMPROVE when CLI≥1; actionize removed implicit content as compensatory New.
+- Keep sentences action-only and outcome-free; express effects via links.
