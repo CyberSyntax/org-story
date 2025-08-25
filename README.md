@@ -1,10 +1,10 @@
-# org-story
+# Org-story
 
-org-story is an Emacs package that extracts narrative elements (such as characters, locations, and scenes) from an Org-mode file by detecting Org ID links. It then filters and cleans corresponding headings to build a single-paragraph “narrative plot” view—making it easier for writers to overview and navigate their story structure.
+Org-story is an Emacs package that extracts narrative elements (such as characters, locations, and scenes) from an Org-mode file by detecting Org ID links. It then filters and cleans corresponding headings to build a single-paragraph “narrative plot” view—making it easier for writers to overview and navigate their story structure.
 
 ## Overview
 
-Many writers use Org-mode to structure their narrative projects. With org-story, you can:
+Many writers use Org-mode to structure their narrative projects. With Org-story, you can:
 
 • Extract narrative element references (via “id:” links) from the current Org buffer.  
 • Cache these IDs so that extraction happens at most once per day (improving performance).  
@@ -12,7 +12,7 @@ Many writers use Org-mode to structure their narrative projects. With org-story,
 • Clean up heading text by removing extraneous markers (e.g., asterisks, priority markers, SCHEDULED lines, and inline link syntax) and normalize spacing.  
 • Display the concatenated narrative plot in a separate buffer with a clickable interface that lets you jump back to the original heading.
 
-When you run the narrative plot command, org-story automatically splits the window vertically. The upper window shows the original Org file (approximately 38.2% of the height, following the golden ratio) while the lower window displays the narrative plot (about 61.8% of the height). In the plot window, pressing RET or clicking a segment takes you directly to its source location in the Org file.
+When you run the narrative plot command, Org-story automatically splits the window vertically. The upper window shows the original Org file (approximately 38.2% of the height, following the golden ratio) while the lower window displays the narrative plot (about 61.8% of the height). In the plot window, pressing RET or clicking a segment takes you directly to its source location in the Org file.
 
 ## Features
 
@@ -32,21 +32,21 @@ When you run the narrative plot command, org-story automatically splits the wind
 
 ## Installation
 
-1. Clone or download the org-story repository.
+1. Clone or download the Org-story repository.
 2. Add the directory to your Emacs `load-path`. For example:
 
-   (add-to-list 'load-path "/path/to/org-story-directory")
+   (add-to-list 'load-path "/path/to/Org-story-directory")
 
 3. Require the package in your Emacs configuration:
 
-   (require 'org-story)
+   (require 'Org-story)
 
-4. org-story binds the interactive command to `C-c s p` by default. Restart Emacs or load your configuration to activate the package.
+4. Org-story binds the interactive command to `C-c s p` by default. Restart Emacs or load your configuration to activate the package.
 
 ## Usage
 
 1. Open an Org-mode file that contains narrative elements via Org ID links.
-2. Press `C-c s p` to invoke the interactive narrative plot command (`org-story-show-plot`).
+2. Press `C-c s p` to invoke the interactive narrative plot command (`Org-story-show-plot`).
 3. Follow the on-screen prompts:
    - When first prompted, you can type a narrative element name (from the available titles) or simply press RET to reuse your previous selection.
    - Continue to add narrative elements until you are finished.
@@ -59,7 +59,7 @@ When you run the narrative plot command, org-story automatically splits the wind
 ## Customization
 
 - **Cache Directory:**  
-  By default, org-story stores its cache in a subdirectory of your `org-roam-directory` or within your `user-emacs-directory`. You can customize the variable `org-roam-id-links-cache-directory` to change this location.
+  By default, Org-story stores its cache in a subdirectory of your `org-roam-directory` or within your `user-emacs-directory`. You can customize the variable `org-roam-id-links-cache-directory` to change this location.
 
 - **Window Layout and Appearance:**  
   The plot view is displayed using a golden-ratio based split. Feel free to adjust your window-management settings if desired.
@@ -84,5 +84,5 @@ Contributions, bug reports, and feature requests are welcome! Feel free to fork 
 
 ## License
 
-`org-story` is licensed under the **GNU General Public License v3.0 (GPL-3.0)**.  
+`Org-story` is licensed under the **GNU General Public License v3.0 (GPL-3.0)**.  
 Refer to the [LICENSE](./LICENSE) file for detailed terms and conditions.
