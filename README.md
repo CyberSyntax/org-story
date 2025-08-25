@@ -1,4 +1,4 @@
-# org-story
+# Org-story
 
 org-story is an Emacs package that extracts narrative elements (such as characters, locations, and scenes) from an Org-mode file by detecting Org ID links. It then filters and cleans corresponding headings to build a single-paragraph “narrative plot” view—making it easier for writers to overview and navigate their story structure.
 
