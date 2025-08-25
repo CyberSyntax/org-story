@@ -27,6 +27,7 @@
 (require 'org-story-filter)
 (require 'org-story-display)
 (require 'org-story-gptel)
+(require 'org-story-backlink)
 (require 'org-story-commands)
 
 (provide 'org-story)

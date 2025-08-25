@@ -216,6 +216,45 @@ If nil, a default subdirectory is used within `org-roam-directory` (or in `user-
   :group 'org-roam)
 
 ;; -------------------------------
+;; Backlink source classification + in-degree constraint
+;; -------------------------------
+
+(defcustom org-story-outline-title-regexps '(" — Series Outline$")
+  "Regexps tested against org-roam files.title to classify Outline files.
+Path is not considered; titles only."
+  :type '(repeat string)
+  :group 'org-story)
+
+(defcustom org-story-backlink-source-class-default 'outline-series
+  "Default backlink source class used when computing in-degree.
+Common values:
+- 'outline-series: classify sources by `org-story-outline-title-regexps`.
+- 'any:           treat any file as a valid source."
+  :type '(choice (const outline-series) (const any) (symbol))
+  :group 'org-story)
+
+(defcustom org-story-backlink-source-classes
+  '((any . (:label "Any file"
+           :predicate org-story--src-class-any-p))
+    (outline-series . (:label "Series Outline (title regex)"
+                      :predicate org-story--src-class-outline-title-p)))
+  "Source-class registry mapping class symbol to a plist:
+  :label     Human-readable label.
+  :predicate A function symbol or function of (file title source-id row) returning non-nil
+             if the backlink from that source should be counted."
+  :type '(alist :key-type symbol
+                :value-type (plist :key-type symbol :value-type sexp))
+  :group 'org-story)
+
+(defcustom org-story-backlink-constraint-default 'none
+  "Default in-degree constraint asked after operator selection.
+- 'none:       no constraint.
+- 'indeg-pos:  keep IDs with in-degree > 0 (under the chosen source-class).
+- 'indeg-zero: keep IDs with in-degree = 0 (under the chosen source-class)."
+  :type '(choice (const none) (const indeg-pos) (const indeg-zero))
+  :group 'org-story)
+
+;; -------------------------------
 ;; Prompt/GPTel serialization options
 ;; -------------------------------
 
