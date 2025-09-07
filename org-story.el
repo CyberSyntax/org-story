@@ -18,6 +18,10 @@
 (require 'seq)
 (require 'subr-x)
 
+(defgroup org-story nil
+  "org-story + gptel integration."
+  :group 'applications)
+
 (require 'org-story-core)
 (require 'org-story-custom)
 (require 'org-story-cache)
