@@ -6,7 +6,6 @@
 (require 'org)
 (require 'cl-lib)
 (require 'seq)
-(require 'org-story)
 
 ;; -------------------------------
 ;; Customization group and user options
