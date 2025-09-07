@@ -6,15 +6,11 @@
 (require 'org)
 (require 'cl-lib)
 (require 'seq)
-
+(require 'org-story)
 
 ;; -------------------------------
 ;; Customization group and user options
 ;; -------------------------------
-
-(defgroup org-story nil
-  "org-story + gptel integration."
-  :group 'applications)
 
 (defcustom org-story-use-tab-bar t
   "If non-nil, ensure tab-bar-mode is enabled and open gptel in a new tab."
