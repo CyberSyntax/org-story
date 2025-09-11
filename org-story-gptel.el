@@ -192,10 +192,11 @@
 
 (defun org-story-compose-data (ctx &optional prev op)
   "Serialize CTX per `org-story-serialization-format`.
+OP is the user-selected operation, defaults to `org-story-default-op` if not provided.
 Returns a string for the user message (or to append into system in system-only mode)."
   (let* ((focus (org-story--resolve-focus ctx))
          (prev  (or prev "<omitted>"))
-         (op    (or op org-story-default-op))
+         (op    (or op org-story-default-op))  ; This line already handles the default
          (plot  (org-story--plot-raw-text ctx))
          (fmt   (or (and (boundp 'org-story-serialization-format)
                          org-story-serialization-format)
@@ -212,11 +213,12 @@ Returns a string for the user message (or to append into system in system-only m
       (_
        (org-story-compose-envelope ctx prev op)))))
 
-(defun org-story-compose-payload (ctx prompt-rec name->rec)
-  "Compose final (SYSTEM . USER) pair for sending to gptel."
+(defun org-story-compose-payload (ctx prompt-rec name->rec &optional operation)
+  "Compose final (SYSTEM . USER) pair for sending to gptel.
+OPERATION is the user-selected operation, defaults to `org-story-default-op`."
   (let* ((plan  (org-story--parse-prompt-record prompt-rec name->rec))
          (templ (or (plist-get plan :system-template) ""))
-         (data  (org-story-compose-data ctx)))
+         (data  (org-story-compose-data ctx nil operation)))
     (if (eq org-story-message-mode 'system-only)
         (cons (string-trim (concat templ "\n\n" data))
               (or org-story-system-only-user-stub "."))
@@ -321,6 +323,17 @@ REC plists: :name :path :ext :raw, optional :title :desc :includes."
          best)
         (nreverse alist)))))
 
+;; -------------------------------
+;; Prompts scanning/dispatch + context
+;; -------------------------------
+
+(defun org-story--read-operation ()
+  "Prompt user to select an operation, with `org-story-default-op` as default."
+  (let* ((operations '("AUTO" "COMPRESS" "SPLIT" "ADD" "IMPROVE"))
+         (default org-story-default-op)
+         (prompt (format "Operation (default: %s): " default)))
+    (completing-read prompt operations nil t nil nil default)))
+
 (defun org-story--post-plot-dispatch ()
   "Compose payload and send to gptel.
 UI hides basenames starting with '_', but compiler sees the full set."
@@ -350,7 +363,9 @@ UI hides basenames starting with '_', but compiler sees the full set."
               (completing-read "Prompt: " displays nil t nil nil initial)))
            (choice (cdr (assoc choice-disp display-map)))
            (rec (cdr (assoc choice visible)))
-           (pair (org-story-compose-payload ctx rec full))
+           ;; Add operation selection here
+           (operation (org-story--read-operation))
+           (pair (org-story-compose-payload ctx rec full operation))
            (system (car pair))
            (user   (cdr pair)))
       (setq org-story--last-prompt-name choice-disp)
